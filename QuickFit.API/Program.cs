@@ -124,19 +124,11 @@ using (var scope = app.Services.CreateScope())
     db.Database.EnsureCreated();
 }
 
-// Configure the HTTP request pipeline.
-//if (app.Environment.IsDevelopment())
-//{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-//
+app.UseSwagger();
+app.UseSwaggerUI();
+
 
 app.UseCors("AllowReactApp");
-
-if (!app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
 
 app.UseAuthentication();
 app.UseAuthorization();

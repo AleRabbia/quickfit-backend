@@ -44,6 +44,7 @@ namespace QuickFit.API.Services.Implementations
                 CookingTime = request.CookingTime,
                 IsActive = true,
                 GeneratedByAI = false,
+                AIPrompt = "",  
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
             };

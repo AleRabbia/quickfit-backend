@@ -23,6 +23,8 @@ namespace QuickFit.API.Services.Implementations
 
         public async Task<MealPlanResponse> CreateMealPlan(int userId, CreateMealPlanRequest request)
         {
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+
             var mealPlan = new MealPlan
             {
                 UserId = userId,
@@ -52,7 +54,9 @@ namespace QuickFit.API.Services.Implementations
             // Crear comidas de ejemplo
             await CreateSampleMeals(mealPlan.Id, request.MealsPerDay, request.DailyCalories);
 
-            return await GetMealPlanById(mealPlan.Id, userId);
+            var response = await GetMealPlanById(mealPlan.Id, userId);
+            await transaction.CommitAsync();
+            return response;
         }
 
         private async Task CreateSampleMeals(int mealPlanId, int mealsPerDay, int dailyCalories)
@@ -75,6 +79,8 @@ namespace QuickFit.API.Services.Implementations
                     Carbs = caloriesPerMeal / 10,
                     Fats = caloriesPerMeal / 25,
                     OrderIndex = i,
+                    RecipeUrl = string.Empty,
+                    ImageUrl = string.Empty,
                     CreatedAt = DateTime.UtcNow
                 };
 

@@ -25,7 +25,7 @@ namespace QuickFit.API.Models.DTOs.Requests
         public List<string> HungerTimes { get; set; } 
         public string FirstMeal { get; set; } 
         public string LastMeal { get; set; } 
-        ublic string DislikedFoods { get; set; } 
+        public string DislikedFoods { get; set; } 
         public string FavoriteFoods { get; set; } 
         public string WaterIntake { get; set; } 
         public string BeverageConsumption { get; set; } 
@@ -42,5 +42,5 @@ namespace QuickFit.API.Models.DTOs.Requests
         public string CookingTime { get; set; } 
         public bool NeedPortable { get; set; } 
         public string PreferredSupport { get; set; } 
-        } 
-        }
+    }
+}

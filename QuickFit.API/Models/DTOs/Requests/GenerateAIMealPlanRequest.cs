@@ -42,5 +42,6 @@ namespace QuickFit.API.Models.DTOs.Requests
         public string CookingTime { get; set; } 
         public bool NeedPortable { get; set; } 
         public string PreferredSupport { get; set; } 
+        public bool UseAI { get; set; } = false; 
     }
 }

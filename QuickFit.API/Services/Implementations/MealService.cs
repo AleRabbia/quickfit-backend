@@ -167,14 +167,100 @@ namespace QuickFit.API.Services.Implementations
             return true;
         }
 
-        public async Task<MealPlanResponse> GenerateAIMealPlan(int userId, CreateMealPlanRequest request)
+        public async Task<MealPlanResponse> GenerateAIMealPlan(int userId, GenerateAIMealPlanRequest request)
         {
-            // TODO: Implementar integración con IA
-            var plan = await CreateMealPlan(userId, request);
-            
+            // --- Parsear valores numéricos que llegan como string ---
+            double.TryParse(request.Age, out var age);
+            double.TryParse(request.Height, out var heightCm);
+            double.TryParse(request.Weight, out var weightKg);
+            int.TryParse(request.MealsPerDay, out var mealsPerDay);
+            if (mealsPerDay < 3 || mealsPerDay > 6) mealsPerDay = 4;
+
+            // --- Calcular BMR (Mifflin-St Jeor) ---
+            double bmr;
+            if (request.BiologicalSex?.ToLower() == "female")
+                bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) - 161;
+            else
+                bmr = (10 * weightKg) + (6.25 * heightCm) - (5 * age) + 5;
+
+            // --- Multiplicador según nivel de actividad ---
+            double activityMultiplier = request.ActivityLevel?.ToLower() switch
+            {
+                "sedentary" => 1.2,
+                "light" => 1.375,
+                "moderate" => 1.55,
+                "heavy" => 1.725,
+                _ => 1.375
+            };
+
+            double tdee = bmr * activityMultiplier;
+
+            // --- Ajustar según objetivo ---
+            double calorieAdjustment = request.MainGoal?.ToLower() switch
+            {
+                "weight_loss" => -0.15,
+                "muscle_gain" => 0.15,
+                "sports_performance" => 0.10,
+                _ => 0
+            };
+
+            int dailyCalories = (int)Math.Round(tdee * (1 + calorieAdjustment));
+            dailyCalories = Math.Clamp(dailyCalories, 1000, 5000); // respeta el Range del DTO original
+
+            // --- Macros ---
+            double proteinPerKg = request.MainGoal?.ToLower() == "muscle_gain" ? 2.0 : 1.6;
+            int dailyProtein = (int)Math.Round(weightKg * proteinPerKg);
+            dailyProtein = Math.Clamp(dailyProtein, 50, 300);
+
+            int dailyFats = (int)Math.Round((dailyCalories * 0.25) / 9);
+            dailyFats = Math.Clamp(dailyFats, 20, 200);
+
+            int remainingCalories = dailyCalories - (dailyProtein * 4) - (dailyFats * 9);
+            int dailyCarbs = (int)Math.Round(Math.Max(remainingCalories, 0) / 4.0);
+            dailyCarbs = Math.Clamp(dailyCarbs, 50, 500);
+
+            // --- Tiempo de cocina: de texto a minutos ---
+            int cookingTimeMinutes = request.CookingTime switch
+            {
+                "less_30" => 25,
+                "30_to_60" => 45,
+                "more_60" => 90,
+                _ => 30
+            };
+
+            // --- Listas de alergias/disgustos (vienen como texto libre separado por comas) ---
+            var allergiesList = string.IsNullOrWhiteSpace(request.Allergies)
+                ? new List<string>()
+                : request.Allergies.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            var dislikedList = string.IsNullOrWhiteSpace(request.DislikedFoods)
+                ? new List<string>()
+                : request.DislikedFoods.Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries).ToList();
+
+            // --- Armar el request que ya sabe consumir CreateMealPlan ---
+            var createRequest = new CreateMealPlanRequest
+            {
+                Name = string.IsNullOrWhiteSpace(request.Name) ? "Mi Plan Nutricional" : $"Plan de {request.Name}",
+                Description = $"Plan generado automáticamente según tu perfil ({request.MainGoal}, {request.DietType})",
+                Goal = request.MainGoal,
+                DietType = request.DietType,
+                DailyCalories = dailyCalories,
+                DailyProtein = dailyProtein,
+                DailyCarbs = dailyCarbs,
+                DailyFats = dailyFats,
+                MealsPerDay = mealsPerDay,
+                Allergies = allergiesList,
+                Intolerances = new List<string>(),
+                DislikedFoods = dislikedList,
+                Budget = request.Budget,
+                CookingTime = cookingTimeMinutes
+            };
+
+            var plan = await CreateMealPlan(userId, createRequest);
+
             var mealPlan = await _context.MealPlans.FindAsync(plan.Id);
             mealPlan.GeneratedByAI = true;
-            mealPlan.AIPrompt = $"Goal: {request.Goal}, Diet: {request.DietType}, Calories: {request.DailyCalories}";
+            mealPlan.AIPrompt = $"Goal: {request.MainGoal}, Diet: {request.DietType}, Calories: {dailyCalories} (calculado con Mifflin-St Jeor)";
             await _context.SaveChangesAsync();
 
             return plan;

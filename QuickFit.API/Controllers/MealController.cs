@@ -40,7 +40,7 @@ namespace QuickFit.API.Controllers
         }
 
         [HttpPost("plans/generate-ai")]
-        public async Task<IActionResult> GenerateAIMealPlan([FromBody] CreateMealPlanRequest request)
+        public async Task<IActionResult> GenerateAIMealPlan([FromBody] GenerateAIMealPlanRequest request)
         {
             try
             {

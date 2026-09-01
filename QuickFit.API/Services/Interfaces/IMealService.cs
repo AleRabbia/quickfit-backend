@@ -12,7 +12,7 @@ namespace QuickFit.API.Services.Interfaces
         Task<List<MealPlanResponse>> GetUserMealPlans(int userId);
         Task<MealPlanResponse> GetMealPlanById(int planId, int userId);
         Task<bool> DeleteMealPlan(int planId, int userId);
-        Task<MealPlanResponse> GenerateAIMealPlan(int userId, CreateMealPlanRequest request);
+        Task<MealPlanResponse> GenerateAIMealPlan(int userId, GenerateAIMealPlanRequest request);
         Task LogMeal(int userId, int mealId, DateTime date, bool completed);
         Task<List<MealLog>> GetMealLogs(int userId, DateTime? startDate = null, DateTime? endDate = null);
     }

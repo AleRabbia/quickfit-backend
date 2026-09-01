@@ -110,7 +110,9 @@ builder.Services.AddCors(options =>
 });
 
 // Dependency Injection - Services
+builder.Services.AddHttpClient();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IGeminiService, GeminiService>();
 builder.Services.AddScoped<IWorkoutService, WorkoutService>();
 builder.Services.AddScoped<IMealService, MealService>();
 builder.Services.AddScoped<IProgressService, ProgressService>();

@@ -20,7 +20,7 @@ namespace QuickFit.API.Services.Implementations
         public async Task<string?> GenerateWorkoutPlanJsonAsync(CreateWorkoutPlanRequest request)
         {
             var apiKey = _configuration["Gemini:ApiKey"];
-            var model = _configuration["Gemini:Model"] ?? "gemini-2.0-flash";
+            var model = _configuration["Gemini:Model"] ?? "gemini-3.6-flash";
 
             if (string.IsNullOrWhiteSpace(apiKey))
             {

@@ -22,7 +22,8 @@ namespace QuickFit.API.Services.Implementations
             _jwtHelper = jwtHelper;
         }
 
-        public async Task<AuthResponse> Register(RegisterRequest request)
+        
+		public async Task<AuthResponse> Register(RegisterRequest request)
 		{
 			// Verificar si el email ya existe
 			var existingUser = await _context.Users
@@ -32,9 +33,6 @@ namespace QuickFit.API.Services.Implementations
 			{
 				throw new Exception("El email ya está registrado");
 			}
-
-			// Usamos una transacción para asegurar que si algo falla, se deshace todo
-			using var transaction = await _context.Database.BeginTransactionAsync();
 
 			try
 			{
@@ -50,21 +48,20 @@ namespace QuickFit.API.Services.Implementations
 				};
 
 				_context.Users.Add(user);
+
+				// Guardamos primero para obtener el Id generado por la DB
 				await _context.SaveChangesAsync();
 
 				// Crear perfil del usuario
 				var userProfile = new UserProfile
 				{
-					UserId = user.Id, // asegúrate que este campo sea la FK correcta
+					UserId = user.Id,
 					CreatedAt = DateTime.UtcNow,
 					UpdatedAt = DateTime.UtcNow
 				};
 
 				_context.UserProfiles.Add(userProfile);
 				await _context.SaveChangesAsync();
-
-				// Confirmar la transacción
-				await transaction.CommitAsync();
 
 				// Generar token
 				var token = _jwtHelper.GenerateToken(user);
@@ -83,16 +80,10 @@ namespace QuickFit.API.Services.Implementations
 			}
 			catch (Exception ex)
 			{
-				// Revertir transacción si algo falla
-				await transaction.RollbackAsync();
-
-				// Capturar la excepción interna (la verdadera causa del error)
 				var innerMessage = ex.InnerException?.Message ?? ex.Message;
-
-				// Lanzar una excepción más clara para ver el detalle en el frontend
 				throw new Exception($"Error al registrar: {innerMessage}");
 			}
-}
+		}
 				
 
         public async Task<AuthResponse> Login(LoginRequest request)

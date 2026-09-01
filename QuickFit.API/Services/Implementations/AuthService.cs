@@ -25,6 +25,8 @@ namespace QuickFit.API.Services.Implementations
         
 		public async Task<AuthResponse> Register(RegisterRequest request)
 		{
+			request.Email = request.Email.Trim().ToLowerInvariant();
+
 			// Verificar si el email ya existe
 			var existingUser = await _context.Users
 				.FirstOrDefaultAsync(u => u.Email == request.Email);
@@ -88,9 +90,11 @@ namespace QuickFit.API.Services.Implementations
 
         public async Task<AuthResponse> Login(LoginRequest request)
         {
+			var email = request.Email.Trim().ToLowerInvariant();
+
             // Buscar usuario
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Email == request.Email);
+				.FirstOrDefaultAsync(u => u.Email.ToLower() == email);
 
             if (user == null)
             {

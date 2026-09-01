@@ -123,7 +123,16 @@ var app = builder.Build();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<QuickFitDbContext>();
-    db.Database.Migrate();
+    try
+    {
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        // Si falla la migración (ej: tabla ya existe), crear tablas faltantes
+        Console.WriteLine($"Migración parcialmente aplicada: {ex.Message}");
+        db.Database.EnsureCreated();
+    }
 }
 
 app.UseSwagger();

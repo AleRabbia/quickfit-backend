@@ -1,8 +1,11 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using QuickFit.API.Models.DTOs.Requests;
 using QuickFit.API.Services.Interfaces;
+using QuickFit.API.Validation;
 
 namespace QuickFit.API.Services.Implementations
 {
@@ -48,6 +51,7 @@ namespace QuickFit.API.Services.Implementations
                 generationConfig = new
                 {
                     responseMimeType = "application/json",
+                    responseSchema = BuildWorkoutResponseSchema(),
                     temperature = 0.7
                 }
             };
@@ -78,6 +82,77 @@ namespace QuickFit.API.Services.Implementations
                 .GetString();
 
             return CleanJsonResponse(text);
+        }
+
+        /// <summary>
+        /// Esquema estructurado (responseSchema) enviado a Gemini para reforzar, a nivel de API,
+        /// los mismos valores permitidos que ya exige <see cref="WorkoutPlanConstraints"/>.
+        /// Los enums NO se hardcodean acá: se derivan directamente de WorkoutPlanConstraints,
+        /// que es la fuente de verdad usada también por el validador del backend.
+        /// </summary>
+        internal static object BuildWorkoutResponseSchema()
+        {
+            static object StringSchema() => new { type = "STRING" };
+            static object IntegerSchema() => new { type = "INTEGER" };
+            static object EnumSchema(IEnumerable<string> values) => new { type = "STRING", @enum = values.ToArray() };
+
+            return new
+            {
+                type = "OBJECT",
+                properties = new
+                {
+                    name = StringSchema(),
+                    description = StringSchema(),
+                    goal = EnumSchema(WorkoutPlanConstraints.Goals),
+                    experienceLevel = EnumSchema(WorkoutPlanConstraints.ExperienceLevels),
+                    durationMinutes = IntegerSchema(),
+                    daysPerWeek = IntegerSchema(),
+                    trainingStyle = EnumSchema(WorkoutPlanConstraints.TrainingStyles),
+                    trainingPlace = EnumSchema(WorkoutPlanConstraints.TrainingPlaces),
+                    equipment = new { type = "ARRAY", items = StringSchema() },
+                    trainingFocus = EnumSchema(WorkoutPlanConstraints.TrainingFocuses),
+                    sessions = new
+                    {
+                        type = "ARRAY",
+                        items = new
+                        {
+                            type = "OBJECT",
+                            properties = new
+                            {
+                                dayOfWeek = StringSchema(),
+                                name = StringSchema(),
+                                estimatedCalories = IntegerSchema(),
+                                difficulty = StringSchema(),
+                                exercises = new
+                                {
+                                    type = "ARRAY",
+                                    items = new
+                                    {
+                                        type = "OBJECT",
+                                        properties = new
+                                        {
+                                            name = StringSchema(),
+                                            description = StringSchema(),
+                                            durationSeconds = IntegerSchema(),
+                                            restSeconds = IntegerSchema(),
+                                            sets = IntegerSchema(),
+                                            reps = IntegerSchema(),
+                                            tips = StringSchema()
+                                        },
+                                        required = new[] { "name", "durationSeconds", "restSeconds", "sets", "reps" }
+                                    }
+                                }
+                            },
+                            required = new[] { "dayOfWeek", "name", "exercises" }
+                        }
+                    }
+                },
+                required = new[]
+                {
+                    "name", "goal", "experienceLevel", "durationMinutes", "daysPerWeek",
+                    "trainingStyle", "trainingPlace", "trainingFocus", "sessions"
+                }
+            };
         }
 
         private static string CleanJsonResponse(string? rawText)
@@ -252,6 +327,12 @@ Reglas:
                 ? "ninguno"
                 : request.DislikedExercises;
 
+            var allowedGoals = string.Join(", ", WorkoutPlanConstraints.Goals);
+            var allowedExperienceLevels = string.Join(", ", WorkoutPlanConstraints.ExperienceLevels);
+            var allowedTrainingStyles = string.Join(", ", WorkoutPlanConstraints.TrainingStyles);
+            var allowedTrainingPlaces = string.Join(", ", WorkoutPlanConstraints.TrainingPlaces);
+            var allowedTrainingFocuses = string.Join(", ", WorkoutPlanConstraints.TrainingFocuses);
+
             return $@"
 Eres un entrenador personal profesional. Genera un plan de entrenamiento estructurado en JSON puro, sin markdown, sin explicaciones extras.
 
@@ -265,6 +346,19 @@ Instrucciones:
 - ""durationSeconds"" debe contener únicamente un número entero.
 - ""restSeconds"" debe contener únicamente un número entero.
 - ""estimatedCalories"" debe contener únicamente un número entero.
+
+REGLAS OBLIGATORIAS para los campos categóricos ""goal"", ""experienceLevel"", ""trainingStyle"", ""trainingPlace"" y ""trainingFocus"":
+- Son códigos internos del sistema (identificadores técnicos), NO son texto libre ni etiquetas visuales para mostrar a un usuario.
+- NO los traduzcas. NO los reformules. NO los conviertas a lenguaje natural ni a otro idioma. NO agregues explicaciones.
+- Debés devolver EXACTAMENTE el mismo código recibido en la sección ""Datos del usuario"" de este prompt para cada uno de esos campos, tal cual, sin ningún cambio.
+- Valores permitidos para ""goal"" (elegí siempre uno de estos, nunca otro): {allowedGoals}
+- Valores permitidos para ""experienceLevel"" (elegí siempre uno de estos, nunca otro): {allowedExperienceLevels}
+- Valores permitidos para ""trainingStyle"" (elegí siempre uno de estos, nunca otro): {allowedTrainingStyles}
+- Valores permitidos para ""trainingPlace"" (elegí siempre uno de estos, nunca otro): {allowedTrainingPlaces}
+- Valores permitidos para ""trainingFocus"" (elegí siempre uno de estos, nunca otro): {allowedTrainingFocuses}
+- Ejemplo correcto: si el usuario tiene goal=lose_weight, debés devolver ""goal"": ""lose_weight"".
+- Ejemplo INCORRECTO (nunca hagas esto): devolver ""goal"": ""Pérdida de peso"", ""weight loss"" o ""perder peso"" cuando el código recibido es ""lose_weight"".
+- Todos estos campos deben respetar además el límite de 50 caracteres, y ""name"" el límite de 100 caracteres.
 - El JSON debe tener esta forma exacta:
 
 {{
@@ -300,13 +394,13 @@ Instrucciones:
 }}
 
 Datos del usuario:
-- objetivo: {request.Goal}
-- nivel: {request.ExperienceLevel}
-- estilo: {request.TrainingStyle}
-- lugar: {request.TrainingPlace}
+- objetivo (código interno, devolver igual en ""goal""): {request.Goal}
+- nivel (código interno, devolver igual en ""experienceLevel""): {request.ExperienceLevel}
+- estilo (código interno, devolver igual en ""trainingStyle""): {request.TrainingStyle}
+- lugar (código interno, devolver igual en ""trainingPlace""): {request.TrainingPlace}
 - duración por sesión: {request.DurationMinutes} minutos
 - días: {trainingDays}
-- enfoque: {request.TrainingFocus}
+- enfoque (código interno, devolver igual en ""trainingFocus""): {request.TrainingFocus}
 - equipo disponible: {equipment}
 - historial médico: {request.MedicalHistory ?? "ninguno"}
 - ejercicios no deseados: {disliked}

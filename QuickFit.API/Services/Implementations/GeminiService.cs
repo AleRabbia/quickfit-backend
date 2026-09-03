@@ -172,6 +172,10 @@ Eres un nutricionista profesional especializado en planes de nutrición personal
 
 Instrucciones:
 - Devuelve solo JSON válido.
+- No agregues markdown, comentarios ni texto adicional.
+- Respeta estrictamente los tipos de datos indicados en el JSON.
+- 'durationSeconds', 'restSeconds', 'sets', 'reps' y 'estimatedCalories' deben ser números enteros, nunca strings.
+- 'reps' debe contener únicamente un número entero. No uses rangos como '10-12', texto como '12 reps', 'AMRAP' ni valores con unidades.
 - El JSON debe tener esta forma exacta:
 {{
   ""name"": ""string"",
@@ -253,7 +257,16 @@ Eres un entrenador personal profesional. Genera un plan de entrenamiento estruct
 
 Instrucciones:
 - Devuelve solo JSON válido.
+- Respeta estrictamente los tipos de datos indicados.
+- Los campos durationSeconds, restSeconds, sets, reps y estimatedCalories deben ser números enteros.
+- Estos campos nunca deben devolverse como texto/string.
+- ""reps"" debe contener únicamente un número entero. No uses rangos como ""10-12"", texto como ""12 reps"", ""AMRAP"" ni valores con unidades.
+- ""sets"" debe contener únicamente un número entero.
+- ""durationSeconds"" debe contener únicamente un número entero.
+- ""restSeconds"" debe contener únicamente un número entero.
+- ""estimatedCalories"" debe contener únicamente un número entero.
 - El JSON debe tener esta forma exacta:
+
 {{
   ""name"": ""string"",
   ""description"": ""string"",

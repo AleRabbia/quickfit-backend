@@ -1,32 +1,38 @@
 using System.ComponentModel.DataAnnotations;
+using QuickFit.API.Validation;
 
 namespace QuickFit.API.Models.DTOs.Requests
 {
     public class CreateWorkoutPlanRequest
     {
         [Required]
+        [MaxLength(WorkoutPlanConstraints.NameMaxLength)]
         public string Name { get; set; }
         
         public string Description { get; set; }
         
         [Required]
+        [MaxLength(WorkoutPlanConstraints.ShortTextMaxLength)]
         public string Goal { get; set; }
         
         [Required]
+        [MaxLength(WorkoutPlanConstraints.ShortTextMaxLength)]
         public string ExperienceLevel { get; set; }
         
         [Required]
-        [Range(5, 120)]
+        [Range(WorkoutPlanConstraints.MinDurationMinutes, WorkoutPlanConstraints.MaxDurationMinutes)]
         public int DurationMinutes { get; set; }
         
         [Required]
-        [Range(1, 7)]
+        [Range(WorkoutPlanConstraints.MinDaysPerWeek, WorkoutPlanConstraints.MaxDaysPerWeek)]
         public int DaysPerWeek { get; set; }
         
         [Required]
+        [MaxLength(WorkoutPlanConstraints.ShortTextMaxLength)]
         public string TrainingStyle { get; set; }
         
         [Required]
+        [MaxLength(WorkoutPlanConstraints.ShortTextMaxLength)]
         public string TrainingPlace { get; set; }
         
         public List<string> Equipment { get; set; }
@@ -34,6 +40,7 @@ namespace QuickFit.API.Models.DTOs.Requests
         public string DislikedExercises { get; set; }
         
         [Required]
+        [MaxLength(WorkoutPlanConstraints.ShortTextMaxLength)]
         public string TrainingFocus { get; set; }
         
         public List<string> TrainingDays { get; set; }

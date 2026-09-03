@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using QuickFit.API.Models.Entities;
+using QuickFit.API.Validation;
 
 namespace QuickFit.API.Data
 {
@@ -55,6 +56,12 @@ namespace QuickFit.API.Data
             {
                 entity.ToTable("workout_plans");
                 entity.HasKey(e => e.Id);
+                entity.Property(e => e.Name).HasMaxLength(WorkoutPlanConstraints.NameMaxLength);
+                entity.Property(e => e.Goal).HasMaxLength(WorkoutPlanConstraints.ShortTextMaxLength);
+                entity.Property(e => e.ExperienceLevel).HasMaxLength(WorkoutPlanConstraints.ShortTextMaxLength);
+                entity.Property(e => e.TrainingStyle).HasMaxLength(WorkoutPlanConstraints.ShortTextMaxLength);
+                entity.Property(e => e.TrainingPlace).HasMaxLength(WorkoutPlanConstraints.ShortTextMaxLength);
+                entity.Property(e => e.TrainingFocus).HasMaxLength(WorkoutPlanConstraints.ShortTextMaxLength);
                 entity.HasIndex(e => e.UserId);
                 
                 entity.HasOne(e => e.User)

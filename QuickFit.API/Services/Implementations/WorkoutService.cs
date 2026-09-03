@@ -4,11 +4,13 @@ using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using QuickFit.API.Data;
 using QuickFit.API.Models.DTOs.Requests;
 using QuickFit.API.Models.DTOs.Responses;
 using QuickFit.API.Models.Entities;
 using QuickFit.API.Services.Interfaces;
+using QuickFit.API.Validation;
 
 namespace QuickFit.API.Services.Implementations
 {
@@ -16,15 +18,23 @@ namespace QuickFit.API.Services.Implementations
     {
         private readonly QuickFitDbContext _context;
         private readonly IGeminiService _geminiService;
+        private readonly ILogger<WorkoutService> _logger;
 
-        public WorkoutService(QuickFitDbContext context, IGeminiService geminiService)
+        public WorkoutService(QuickFitDbContext context, IGeminiService geminiService, ILogger<WorkoutService> logger)
         {
             _context = context;
             _geminiService = geminiService;
+            _logger = logger;
         }
 
         public async Task<WorkoutPlanResponse> CreateWorkoutPlan(int userId, CreateWorkoutPlanRequest request)
         {
+            var requestErrors = WorkoutPlanConstraints.ValidateRequest(request);
+            if (requestErrors.Count > 0)
+            {
+                throw new WorkoutPlanValidationException(requestErrors);
+            }
+
             var workoutPlan = new WorkoutPlan
             {
                 UserId = userId,
@@ -47,14 +57,8 @@ namespace QuickFit.API.Services.Implementations
                 UpdatedAt = DateTime.UtcNow
             };
 
+            ValidatePlanBeforePersistence(workoutPlan);
             _context.WorkoutPlans.Add(workoutPlan);
-
-            Console.WriteLine($"Name: {workoutPlan.Name} ({workoutPlan.Name?.Length})");
-            Console.WriteLine($"Goal: {workoutPlan.Goal} ({workoutPlan.Goal?.Length})");
-            Console.WriteLine($"ExperienceLevel: {workoutPlan.ExperienceLevel} ({workoutPlan.ExperienceLevel?.Length})");
-            Console.WriteLine($"TrainingStyle: {workoutPlan.TrainingStyle} ({workoutPlan.TrainingStyle?.Length})");
-            Console.WriteLine($"TrainingPlace: {workoutPlan.TrainingPlace} ({workoutPlan.TrainingPlace?.Length})");
-            Console.WriteLine($"TrainingFocus: {workoutPlan.TrainingFocus} ({workoutPlan.TrainingFocus?.Length})");
             
             await _context.SaveChangesAsync();
 
@@ -231,13 +235,10 @@ namespace QuickFit.API.Services.Implementations
 
         public async Task<WorkoutPlanResponse> GenerateAIWorkoutPlan(int userId, CreateWorkoutPlanRequest request)
         {
-            if (string.IsNullOrWhiteSpace(request.Goal) ||
-                string.IsNullOrWhiteSpace(request.ExperienceLevel) ||
-                string.IsNullOrWhiteSpace(request.TrainingStyle) ||
-                string.IsNullOrWhiteSpace(request.TrainingPlace) ||
-                string.IsNullOrWhiteSpace(request.TrainingFocus))
+            var requestErrors = WorkoutPlanConstraints.ValidateRequest(request);
+            if (requestErrors.Count > 0)
             {
-                throw new Exception("Faltan datos obligatorios para generar el plan con IA.");
+                throw new WorkoutPlanValidationException(requestErrors);
             }
 
             var trainingDays = request.TrainingDays != null && request.TrainingDays.Any()
@@ -259,33 +260,52 @@ namespace QuickFit.API.Services.Implementations
                     .Trim();
             }
 
-            var aiPlan = JsonSerializer.Deserialize<GeminiWorkoutPlanResponse>(cleanJson, new JsonSerializerOptions
+            GeminiWorkoutPlanResponse? aiPlan;
+            try
             {
-                PropertyNameCaseInsensitive = true
-            });
+                aiPlan = JsonSerializer.Deserialize<GeminiWorkoutPlanResponse>(cleanJson, new JsonSerializerOptions
+                {
+                    PropertyNameCaseInsensitive = true
+                });
+            }
+            catch (JsonException ex)
+            {
+                _logger.LogWarning(ex, "WorkoutPlan AI validation failed: Gemini returned invalid JSON.");
+                throw new WorkoutPlanValidationException(new[] { "Gemini devolvió un JSON inválido." });
+            }
 
             if (aiPlan == null)
             {
-                throw new Exception("No se pudo interpretar la respuesta de Gemini.");
+                _logger.LogWarning("WorkoutPlan AI validation failed: empty response object.");
+                throw new WorkoutPlanValidationException(new[] { "Gemini no devolvió la estructura esperada." });
+            }
+
+            var aiErrors = WorkoutPlanConstraints.ValidateFields(aiPlan.Name, aiPlan.Goal,
+                aiPlan.ExperienceLevel, aiPlan.TrainingStyle, aiPlan.TrainingPlace, aiPlan.TrainingFocus,
+                aiPlan.DurationMinutes, aiPlan.DaysPerWeek, requireName: true);
+
+            LogAiFieldLengths(aiPlan);
+            if (aiErrors.Count > 0)
+            {
+                _logger.LogWarning("WorkoutPlan AI validation failed: {Errors}", string.Join(" | ", aiErrors));
+                throw new WorkoutPlanValidationException(aiErrors);
             }
 
             var plan = new WorkoutPlan
             {
                 UserId = userId,
-                Name = string.IsNullOrWhiteSpace(aiPlan.Name) ? $"Plan IA - {GetGoalLabel(request.Goal)}" : aiPlan.Name,
-                Description = string.IsNullOrWhiteSpace(aiPlan.Description)
-                    ? $"Plan generado por Gemini para {GetGoalLabel(request.Goal).ToLowerInvariant()} con enfoque {request.TrainingFocus}."
-                    : aiPlan.Description,
-                Goal = string.IsNullOrWhiteSpace(aiPlan.Goal) ? request.Goal : aiPlan.Goal,
-                ExperienceLevel = string.IsNullOrWhiteSpace(aiPlan.ExperienceLevel) ? request.ExperienceLevel : aiPlan.ExperienceLevel,
-                DurationMinutes = aiPlan.DurationMinutes > 0 ? aiPlan.DurationMinutes : (request.DurationMinutes > 0 ? request.DurationMinutes : 30),
-                DaysPerWeek = aiPlan.DaysPerWeek > 0 ? aiPlan.DaysPerWeek : trainingDays.Count,
-                TrainingStyle = string.IsNullOrWhiteSpace(aiPlan.TrainingStyle) ? request.TrainingStyle : aiPlan.TrainingStyle,
-                TrainingPlace = string.IsNullOrWhiteSpace(aiPlan.TrainingPlace) ? request.TrainingPlace : aiPlan.TrainingPlace,
+                Name = aiPlan.Name!,
+                Description = aiPlan.Description,
+                Goal = aiPlan.Goal,
+                ExperienceLevel = aiPlan.ExperienceLevel,
+                DurationMinutes = aiPlan.DurationMinutes,
+                DaysPerWeek = aiPlan.DaysPerWeek,
+                TrainingStyle = aiPlan.TrainingStyle,
+                TrainingPlace = aiPlan.TrainingPlace,
                 Equipment = JsonSerializer.Serialize(aiPlan.Equipment ?? request.Equipment ?? new List<string>()),
                 MedicalHistory = request.MedicalHistory,
                 DislikedExercises = request.DislikedExercises,
-                TrainingFocus = string.IsNullOrWhiteSpace(aiPlan.TrainingFocus) ? request.TrainingFocus : aiPlan.TrainingFocus,
+                TrainingFocus = aiPlan.TrainingFocus,
                 IsActive = true,
                 GeneratedByAI = true,
                 AIPrompt = $"Goal: {request.Goal}, Level: {request.ExperienceLevel}, Style: {request.TrainingStyle}, Days: {string.Join(", ", trainingDays)}",
@@ -293,6 +313,7 @@ namespace QuickFit.API.Services.Implementations
                 UpdatedAt = DateTime.UtcNow
             };
 
+            ValidatePlanBeforePersistence(plan);
             _context.WorkoutPlans.Add(plan);
             await _context.SaveChangesAsync();
 
@@ -562,6 +583,30 @@ namespace QuickFit.API.Services.Implementations
             public int Sets { get; set; }
             public int Reps { get; set; }
             public string? Tips { get; set; }
+        }
+
+        private void ValidatePlanBeforePersistence(WorkoutPlan plan)
+        {
+            var errors = WorkoutPlanConstraints.ValidatePlan(plan);
+            if (errors.Count > 0)
+            {
+                _logger.LogWarning("WorkoutPlan persistence validation failed: {Errors}", string.Join(" | ", errors));
+                throw new WorkoutPlanValidationException(errors);
+            }
+        }
+
+        private void LogAiFieldLengths(GeminiWorkoutPlanResponse aiPlan)
+        {
+            _logger.LogInformation(
+                "WorkoutPlan AI validation: Name {NameLength}/{NameMax}, Goal {GoalLength}/{ShortMax}, " +
+                "ExperienceLevel {ExperienceLength}/{ShortMax}, TrainingStyle {StyleLength}/{ShortMax}, " +
+                "TrainingPlace {PlaceLength}/{ShortMax}, TrainingFocus {FocusLength}/{ShortMax}",
+                aiPlan.Name?.Length ?? 0, WorkoutPlanConstraints.NameMaxLength,
+                aiPlan.Goal?.Length ?? 0, WorkoutPlanConstraints.ShortTextMaxLength,
+                aiPlan.ExperienceLevel?.Length ?? 0, WorkoutPlanConstraints.ShortTextMaxLength,
+                aiPlan.TrainingStyle?.Length ?? 0, WorkoutPlanConstraints.ShortTextMaxLength,
+                aiPlan.TrainingPlace?.Length ?? 0, WorkoutPlanConstraints.ShortTextMaxLength,
+                aiPlan.TrainingFocus?.Length ?? 0, WorkoutPlanConstraints.ShortTextMaxLength);
         }
 
         public async Task LogWorkout(int userId, LogWorkoutRequest request)

@@ -1,9 +1,12 @@
 using System;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using QuickFit.API.Models.DTOs.Requests;
 using QuickFit.API.Services.Interfaces;
+using QuickFit.API.Validation;
 
 namespace QuickFit.API.Controllers
 {
@@ -33,6 +36,14 @@ namespace QuickFit.API.Controllers
                 var plan = await _workoutService.CreateWorkoutPlan(userId, request);
                 return Ok(plan);
             }
+            catch (WorkoutPlanValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            }
+            catch (DbUpdateException ex) when (HasPostgresState(ex, "22001"))
+            {
+                return BadRequest(new { message = "El plan contiene un campo que supera el límite permitido." });
+            }
             catch (Exception ex)
             {
                 return BadRequest(new { message = ex.Message });
@@ -47,6 +58,14 @@ namespace QuickFit.API.Controllers
                 var userId = GetUserId();
                 var plan = await _workoutService.GenerateAIWorkoutPlan(userId, request);
                 return Ok(plan);
+            }
+            catch (WorkoutPlanValidationException ex)
+            {
+                return BadRequest(new { message = ex.Message, errors = ex.Errors });
+            }
+            catch (DbUpdateException ex) when (HasPostgresState(ex, "22001"))
+            {
+                return BadRequest(new { message = "El plan generado contiene un campo que supera el límite permitido." });
             }
             catch (Exception ex)
             {
@@ -133,6 +152,19 @@ namespace QuickFit.API.Controllers
             {
                 return BadRequest(new { message = ex.Message });
             }
+        }
+
+        private static bool HasPostgresState(Exception exception, string state)
+        {
+            for (var current = exception; current != null; current = current.InnerException)
+            {
+                if (current is PostgresException postgresException && postgresException.SqlState == state)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
     }
 }

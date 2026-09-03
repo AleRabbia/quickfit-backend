@@ -50,6 +50,12 @@ namespace QuickFit.API.Services.Implementations
             _context.WorkoutPlans.Add(workoutPlan);
             await _context.SaveChangesAsync();
 
+            Console.WriteLine($"Name: {workoutPlan.Name} ({workoutPlan.Name?.Length})");
+            Console.WriteLine($"Goal: {workoutPlan.Goal} ({workoutPlan.Goal?.Length})");
+            Console.WriteLine($"ExperienceLevel: {workoutPlan.ExperienceLevel} ({workoutPlan.ExperienceLevel?.Length})");
+            Console.WriteLine($"TrainingStyle: {workoutPlan.TrainingStyle} ({workoutPlan.TrainingStyle?.Length})");
+            Console.WriteLine($"TrainingPlace: {workoutPlan.TrainingPlace} ({workoutPlan.TrainingPlace?.Length})");
+            Console.WriteLine($"TrainingFocus: {workoutPlan.TrainingFocus} ({workoutPlan.TrainingFocus?.Length})");
             // Crear sesiones de ejemplo (luego será generado por IA)
             await CreateSampleWorkoutSessions(workoutPlan.Id, request.TrainingDays);
 

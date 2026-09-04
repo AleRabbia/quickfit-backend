@@ -16,8 +16,8 @@ namespace QuickFit.API.Models.DTOs.Requests
         public decimal? Legs { get; set; }
         public decimal? BodyFatPercentage { get; set; }
         public decimal? MuscleMass { get; set; }
-        public List<string> Photos { get; set; }
-        public string Notes { get; set; }
+        public List<string>? Photos { get; set; }
+        public string? Notes { get; set; }
         public int? WeeklyWorkouts { get; set; }
     }
 }

@@ -42,10 +42,10 @@ namespace QuickFit.API.Models.Entities
         public decimal? MuscleMass { get; set; }
         
         [Column(TypeName = "json")]
-        public string Photos { get; set; }
+        public string? Photos { get; set; }
         
         [Column(TypeName = "text")]
-        public string Notes { get; set; }
+        public string? Notes { get; set; }
         
         public int? WeeklyWorkouts { get; set; }
         
